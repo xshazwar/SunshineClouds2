@@ -497,7 +497,7 @@ func _render_callback(effect_callback_type, render_data):
 					#reflections
 					accumulation_textures.append(rd.texture_create(base_colorformat, RDTextureView.new(), [blankImageData]))
 					
-					general_data_buffer = rd.uniform_buffer_create(256)
+					general_data_buffer = rd.uniform_buffer_create(272)
 					
 					var depthformat : RDTextureFormat = rd.texture_get_format(depth_image)
 					depthformat.width = new_size.x
@@ -836,8 +836,8 @@ func retrieve_position_queries(data : PackedByteArray):
 			#self.effect_callback_type = CompositorEffect.EFFECT_CALLBACK_TYPE_PRE_TRANSPARENT
 
 func update_matrices(camera_tr, view_proj, new_size: Vector2i):
-	if general_data.size() != 256: #64 * 4 bytes for each float = 256.
-		general_data.resize(256)
+	if general_data.size() != 272: #68 * 4 bytes for each float = 272.
+		general_data.resize(272)
 	
 	var idx = 0
 	filter_index += 1
@@ -1035,7 +1035,13 @@ func update_matrices(camera_tr, view_proj, new_size: Vector2i):
 	#general_data.encode_float(idx, last_size.y); idx += 4
 	#general_data.encode_float(idx, 0.0); idx += 4
 	#general_data.encode_float(idx, 0.0); idx += 4
-	
+
+	# Encode origin_offset for clipmap systems
+	general_data.encode_float(idx, origin_offset.x); idx += 4
+	general_data.encode_float(idx, origin_offset.y); idx += 4
+	general_data.encode_float(idx, origin_offset.z); idx += 4
+	general_data.encode_float(idx, 0.0); idx += 4  # padding
+
 	# Copy to byte buffer
 	rd.buffer_update(general_data_buffer, 0, general_data.size(), general_data)
 
