@@ -511,6 +511,9 @@ void main() {
 	float lightingdensityMultiplier = genericData.data.cloud_lighting_power;
 	lightingdensityMultiplier += lightingdensityMultiplier * 3.0 * coverage;
 
+	float sphereRadius = genericData.data.sphere_curvature_radius;
+	bool useCurvature = sphereRadius > 0.0;
+
 	vec4 aobase = genericData.data.ambientGroundLightColor;
 	
 	//bool debugCollisions = false;
@@ -681,7 +684,16 @@ void main() {
 		}
 		
 		curPos = rayOrigin + raydirection * traveledDistance;
-		
+
+		// Apply spherical curvature warping
+		if (useCurvature) {
+			vec2 horizontalOffset = curPos.xz - rayOrigin.xz;
+			float horizontalDist = length(horizontalOffset);
+			float effectiveRadius = sphereRadius + curPos.y;
+			float curvatureDrop = (horizontalDist * horizontalDist) / (2.0 * effectiveRadius);
+			curPos.y -= curvatureDrop;
+		}
+
 		vec4 maskSample = texture(extra_large_noise, (curPos.xz - extralargeNoisePos.xz) / extralargenoiseScale);
 		ceilingSample = mix(halfCeiling, cloudceiling, maskSample.a);
 		
