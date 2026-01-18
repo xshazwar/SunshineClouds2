@@ -232,26 +232,28 @@ float sampleSceneCoarse(
 }
 
 float sampleLighting(
-	int stepCount, 
+	int stepCount,
 	vec3 worldPosition,
-	vec3 extralargeNoisePos, 
-	vec3 largeNoisePos, 
-	vec3 mediumNoisePos, 
-	vec3 smallNoisePos, 
+	vec3 extralargeNoisePos,
+	vec3 largeNoisePos,
+	vec3 mediumNoisePos,
+	vec3 smallNoisePos,
 	vec3 sunDirection,
 	float densityMultiplier,
-	float sunUpWeight, 
-	float stepDistance,  
-	float cloudceiling, 
-	float cloudfloor, 
+	float sunUpWeight,
+	float stepDistance,
+	float cloudceiling,
+	float cloudfloor,
 	float extralargenoisescale,
-	float largenoisescale, 
-	float mediumnoisescale, 
-	float smallnoisescale, 
-	float coverage, 
-	float smallscalePower, 
-	float curlPower, 
-	float lod)
+	float largenoisescale,
+	float mediumnoisescale,
+	float smallnoisescale,
+	float coverage,
+	float smallscalePower,
+	float curlPower,
+	float lod,
+	float sphereRadius,
+	bool useCurvature)
 	{
 	float density = 0.0;
 	float stepCountFloat = max(float(stepCount) * lod, 2.0);
@@ -269,6 +271,13 @@ float sampleLighting(
 	for (float i = 0.0; i < stepCountFloat; i++) {
 		traveledDistance = mix(eachShortStep, actualDistance, clamp(quadraticOut(i / stepCountFloat), 0.0, 1.0));
 		curPos = worldPosition + sunDirection * traveledDistance;
+
+		// Apply spherical curvature warping based on distance from lit point
+		if (useCurvature) {
+			float horizontalDist = length(curPos.xz - worldPosition.xz);
+			float drop = (horizontalDist * horizontalDist) / (2.0 * sphereRadius);
+			curPos.y += drop;
+		}
 
 		if (density < 1.0 && clamp(curPos.y, cloudfloor, cloudceiling) == curPos.y){
 			heightGradient = remap(curPos.y, cloudfloor, cloudceiling, 0.0, 1.0);
@@ -289,27 +298,36 @@ float sampleLighting(
 
 float sampleAO(
 	vec3 extralargeNoisePos,
-	vec3 largeNoisePos, 
-	vec3 mediumNoisePos, 
-	vec3 smallNoisePos, 
-	vec3 worldPosition, 
-	float lightingSampleRange, 
-	float cloudceiling, 
+	vec3 largeNoisePos,
+	vec3 mediumNoisePos,
+	vec3 smallNoisePos,
+	vec3 worldPosition,
+	float lightingSampleRange,
+	float cloudceiling,
 	float cloudfloor,
 	float extralargenoisescale,
-	float largenoisescale, 
-	float mediumnoisescale, 
-	float smallnoisescale, 
-	float coverage, 
-	float smallscalePower, 
-	float curlPower, 
-	float lod)
+	float largenoisescale,
+	float mediumnoisescale,
+	float smallnoisescale,
+	float coverage,
+	float smallscalePower,
+	float curlPower,
+	float lod,
+	float sphereRadius,
+	bool useCurvature)
 	{
 	vec3 samplePos = worldPosition;
 	samplePos.y += lightingSampleRange * 0.5;
 	samplePos.y += lightingSampleRange * (rand(samplePos.xz) * 2.0 - 1.0);
 	samplePos.x += lightingSampleRange * (rand(samplePos.zy) * 2.0 - 1.0);
 	samplePos.z += lightingSampleRange * (rand(samplePos.yx) * 2.0 - 1.0);
+
+	// Apply spherical curvature warping based on distance from sample origin
+	if (useCurvature) {
+		float horizontalDist = length(samplePos.xz - worldPosition.xz);
+		float drop = (horizontalDist * horizontalDist) / (2.0 * sphereRadius);
+		samplePos.y += drop;
+	}
 
 	float extraLargeShape = texture(extra_large_noise, (samplePos.xz - extralargeNoisePos.xz) / extralargenoisescale).a;
 	return sampleScene(largeNoisePos, mediumNoisePos, smallNoisePos, samplePos, cloudceiling, cloudfloor, extraLargeShape, largenoisescale, mediumnoisescale, smallnoisescale, coverage, smallscalePower, curlPower, lod, true);
@@ -511,6 +529,9 @@ void main() {
 	float lightingdensityMultiplier = genericData.data.cloud_lighting_power;
 	lightingdensityMultiplier += lightingdensityMultiplier * 3.0 * coverage;
 
+	float sphereRadius = genericData.data.sphere_curvature_radius;
+	bool useCurvature = sphereRadius > 0.0;
+
 	vec4 aobase = genericData.data.ambientGroundLightColor;
 	
 	//bool debugCollisions = false;
@@ -681,11 +702,18 @@ void main() {
 		}
 		
 		curPos = rayOrigin + raydirection * traveledDistance;
-		
+
+		// Apply spherical curvature warping based on distance from camera
+		if (useCurvature) {
+			float horizontalDist = length(curPos.xz - rayOrigin.xz);
+			float drop = (horizontalDist * horizontalDist) / (2.0 * sphereRadius);
+			curPos.y += drop;
+		}
+
 		vec4 maskSample = texture(extra_large_noise, (curPos.xz - extralargeNoisePos.xz) / extralargenoiseScale);
 		ceilingSample = mix(halfCeiling, cloudceiling, maskSample.a);
-		
-		//sampleAtmospherics(curPos, atmosphericHeight, newStep, Rayleighscaleheight, Miescaleheight, RayleighScatteringCoef, MieScatteringCoef, atmosphericDensity, density, totalRlh, totalMie, iOdRlh, iOdMie); 
+
+		//sampleAtmospherics(curPos, atmosphericHeight, newStep, Rayleighscaleheight, Miescaleheight, RayleighScatteringCoef, MieScatteringCoef, atmosphericDensity, density, totalRlh, totalMie, iOdRlh, iOdMie);
 		atmoSamples += 1.0;
 		if (clamp(curPos.y, cloudfloor, cloudceiling) == curPos.y){
 
@@ -711,8 +739,8 @@ void main() {
 					float sunUpWeight = directionalLightSunUpPower[lightI].r;
 
 					int thislightingStepCount = min(int(directionalLights[lightI].direction.w), lightingStepCount);
-					float henyeygreenstein =  pow(HenyeyGreenstein(genericData.data.anisotropy, directionalLightSunUpPower[lightI].b), mix(1.0, 2.0, 1.0 - genericData.data.anisotropy)); 
-					float densitySample = sampleLighting(thislightingStepCount, curPos, extralargeNoisePos, largeNoisePos, mediumNoisePos, smallNoisePos, sundir, densityMultiplier * lightingdensityMultiplier, sunUpWeight, lightingStepDistance, ceilingSample, cloudfloor, extralargenoiseScale, largenoiseScale, mediumnoiseScale, smallnoiseScale, coverage, smallNoiseMultiplier, curlPower, curLod);
+					float henyeygreenstein =  pow(HenyeyGreenstein(genericData.data.anisotropy, directionalLightSunUpPower[lightI].b), mix(1.0, 2.0, 1.0 - genericData.data.anisotropy));
+					float densitySample = sampleLighting(thislightingStepCount, curPos, extralargeNoisePos, largeNoisePos, mediumNoisePos, smallNoisePos, sundir, densityMultiplier * lightingdensityMultiplier, sunUpWeight, lightingStepDistance, ceilingSample, cloudfloor, extralargenoiseScale, largenoiseScale, mediumnoiseScale, smallnoiseScale, coverage, smallNoiseMultiplier, curlPower, curLod, sphereRadius, useCurvature);
 					densitySample = BeersLaw(lightingStepDistance, densitySample * henyeygreenstein);
 					//densitySample = Powder(lightingStepDistance, densitySample);
 					float thisStepLightingWeight = (clamp(pow(densitySample, lightingSharpness), 0.0, 1.0)) * sunUpWeight;
@@ -767,7 +795,7 @@ void main() {
 					if (pointLights[lightI].color.a > 0.0 && lightDistanceWeight < pointLights[lightI].position.w){
 						lightToOriginDelta = normalize(lightToOriginDelta);
 						//float densitySample = 1.0 - newdensity;
-						float densitySample = sampleLighting(3, curPos, extralargeNoisePos, largeNoisePos, mediumNoisePos, smallNoisePos, lightToOriginDelta, densityMultiplier, 1.0, min(maxstep, lightDistanceWeight), ceilingSample, cloudfloor, extralargenoiseScale, largenoiseScale, mediumnoiseScale, smallnoiseScale, coverage, smallNoiseMultiplier, curlPower, curLod);
+						float densitySample = sampleLighting(3, curPos, extralargeNoisePos, largeNoisePos, mediumNoisePos, smallNoisePos, lightToOriginDelta, densityMultiplier, 1.0, min(maxstep, lightDistanceWeight), ceilingSample, cloudfloor, extralargenoiseScale, largenoiseScale, mediumnoiseScale, smallnoiseScale, coverage, smallNoiseMultiplier, curlPower, curLod, sphereRadius, useCurvature);
 						
 						float henyeygreenstein = pow(HenyeyGreenstein(genericData.data.anisotropy, dot(lightToOriginDelta, raydirection)), mix(1.0, 2.0, 1.0 - genericData.data.anisotropy)); 
 						densitySample = BeersLaw(lightDistanceWeight, densitySample * henyeygreenstein);
@@ -806,11 +834,11 @@ void main() {
 			}
 		}
 		else{
-			if (min(curPos.y - cloudceiling, raydirection.y) > 0.0 || max(curPos.y - cloudfloor, raydirection.y) < 0.0){
-				
+			if (!useCurvature && (min(curPos.y - cloudceiling, raydirection.y) > 0.0 || max(curPos.y - cloudfloor, raydirection.y) < 0.0)){
+
 				traveledDistance = min(maxTheoreticalStep, linear_depth);
 				curPos = rayOrigin + raydirection * traveledDistance;
-				
+
 				//debugCollisions = true;
 				break;
 			}

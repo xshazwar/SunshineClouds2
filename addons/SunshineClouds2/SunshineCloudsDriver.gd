@@ -50,8 +50,10 @@ class_name SunshineCloudsDriverGD
 
 @export var directional_light_power_multiplier: float = 1.0
 @export var point_light_power_multiplier: float = 1.0
-@export_group("Wind Controls")
+@export_group("World Settings")
+@export var sphere_curvature_radius : float = 0.0  # 0 = disabled, >0 = planet radius (e.g., 6371000 for Earth)
 @export var origin_offset : Vector3 = Vector3.ZERO
+@export_group("Wind Controls")
 @export var wind_direction: Vector3 = Vector3(1.0, 0.0, 1.0)
 @export var extra_large_structures_wind_speed: float = 140.0
 @export var large_structures_wind_speed: float = 100.0
@@ -96,6 +98,7 @@ func _process(delta : float):
 			small_clouds_pos = wrap_vector(small_clouds_pos, _small_clouds_domain)
 			
 			clouds_resource.origin_offset = origin_offset
+			clouds_resource.sphere_curvature_radius = sphere_curvature_radius
 			clouds_resource.extra_large_scale_clouds_position = origin_offset + extra_large_clouds_pos
 			clouds_resource.large_scale_clouds_position = origin_offset + large_clouds_pos
 			clouds_resource.medium_scale_clouds_position = origin_offset + medium_clouds_pos

@@ -35,6 +35,7 @@ class_name SunshineCloudsGD
 
 @export var cloud_floor : float = 1500.0
 @export var cloud_ceiling : float = 25000.0
+var sphere_curvature_radius : float = 0.0  # 0 = disabled, >0 = enable curvature (e.g., 6371000 for Earth)
 
 @export_subgroup("Performance")
 @export var max_step_count : float = 100
@@ -497,7 +498,7 @@ func _render_callback(effect_callback_type, render_data):
 					#reflections
 					accumulation_textures.append(rd.texture_create(base_colorformat, RDTextureView.new(), [blankImageData]))
 					
-					general_data_buffer = rd.uniform_buffer_create(256)
+					general_data_buffer = rd.uniform_buffer_create(272)
 					
 					var depthformat : RDTextureFormat = rd.texture_get_format(depth_image)
 					depthformat.width = new_size.x
@@ -836,8 +837,8 @@ func retrieve_position_queries(data : PackedByteArray):
 			#self.effect_callback_type = CompositorEffect.EFFECT_CALLBACK_TYPE_PRE_TRANSPARENT
 
 func update_matrices(camera_tr, view_proj, new_size: Vector2i):
-	if general_data.size() != 256: #64 * 4 bytes for each float = 256.
-		general_data.resize(256)
+	if general_data.size() != 272: #68 * 4 bytes for each float = 272.
+		general_data.resize(272)
 	
 	var idx = 0
 	filter_index += 1
@@ -1030,12 +1031,17 @@ func update_matrices(camera_tr, view_proj, new_size: Vector2i):
 	else:
 		general_data.encode_float(idx, 0.0); idx += 4
 	general_data.encode_float(idx, int(pow(2.0, float(resolution_scale)))); idx += 4
+
+	general_data.encode_float(idx, sphere_curvature_radius); idx += 4
+	general_data.encode_float(idx, 0.0); idx += 4  # padding
+	general_data.encode_float(idx, 0.0); idx += 4  # padding
+	general_data.encode_float(idx, 0.0); idx += 4  # padding
 	#
 	#general_data.encode_float(idx, last_size.x); idx += 4
 	#general_data.encode_float(idx, last_size.y); idx += 4
 	#general_data.encode_float(idx, 0.0); idx += 4
 	#general_data.encode_float(idx, 0.0); idx += 4
-	
+
 	# Copy to byte buffer
 	rd.buffer_update(general_data_buffer, 0, general_data.size(), general_data)
 
