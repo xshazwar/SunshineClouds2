@@ -35,7 +35,7 @@ class_name SunshineCloudsGD
 
 @export var cloud_floor : float = 1500.0
 @export var cloud_ceiling : float = 25000.0
-@export var sphere_curvature_radius : float = 0.0  # 0 = disabled, >0 = enable curvature (e.g., 6371000 for Earth)
+var sphere_curvature_radius : float = 0.0  # 0 = disabled, >0 = enable curvature (e.g., 6371000 for Earth)
 
 @export_subgroup("Performance")
 @export var max_step_count : float = 100
