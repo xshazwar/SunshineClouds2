@@ -443,7 +443,10 @@ void main() {
 	// Define the ray properties
 	
 	vec3 raydirection = normalize(rd_world);
-	vec3 rayOrigin = scene_data_block.data.main_cam_inv_view_matrix[3].xyz; //center of camera for the ray origin, not worried about the screen width playing in, as it's for clouds.
+	// Camera position (for view-relative calculations)
+	vec3 cameraPos = scene_data_block.data.main_cam_inv_view_matrix[3].xyz;
+	// Ray origin with clipmap offset (for world-space noise sampling)
+	vec3 rayOrigin = cameraPos + genericData.data.origin_offset;
 
 
 	//DITHER
@@ -855,8 +858,9 @@ void main() {
 
 	//accumulation preperation:
 	float finalDensityDistance = min(traveledDistance, highestDensityDistance);
-	vec3 worldFinalPos = rayOrigin + raydirection * traveledDistance;
-	vec3 delta = rayOrigin - scene_data_block.prev_data.main_cam_inv_view_matrix[3].xyz;
+	// Use cameraPos for reprojection (prev frame matrix doesn't have offset)
+	vec3 worldFinalPos = cameraPos + raydirection * traveledDistance;
+	vec3 delta = cameraPos - scene_data_block.prev_data.main_cam_inv_view_matrix[3].xyz;
 	worldFinalPos += delta;
 
 	vec4 reprojectedScreenPos = vec4(0.0);

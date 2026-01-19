@@ -52,6 +52,7 @@ class_name SunshineCloudsDriverGD
 @export var point_light_power_multiplier: float = 1.0
 @export_group("Wind Controls")
 @export var origin_offset : Vector3 = Vector3.ZERO
+var _prev_origin_offset := Vector3.ZERO
 @export var wind_direction: Vector3 = Vector3(1.0, 0.0, 1.0)
 @export var extra_large_structures_wind_speed: float = 140.0
 @export var large_structures_wind_speed: float = 100.0
@@ -83,9 +84,13 @@ func _ready():
 func _process(delta : float):
 	if clouds_resource != null:
 		clouds_resource.current_time = wrap(clouds_resource.current_time + delta * clouds_resource.dither_speed, 0.0, clouds_resource.dither_speed * 64.0)
-		
+
 		if update_continuously:
 			_updating_settings = false
+
+			# Detect origin_offset changes for clipmap systems
+			var offset_changed := (_prev_origin_offset != origin_offset)
+			_prev_origin_offset = origin_offset
 			extra_large_clouds_pos += wind_direction * extra_large_structures_wind_speed * delta
 			extra_large_clouds_pos = wrap_vector(extra_large_clouds_pos, _extralarge_clouds_domain)
 			large_clouds_pos += wind_direction * large_structures_wind_speed * delta
@@ -96,10 +101,11 @@ func _process(delta : float):
 			small_clouds_pos = wrap_vector(small_clouds_pos, _small_clouds_domain)
 			
 			clouds_resource.origin_offset = origin_offset
-			clouds_resource.extra_large_scale_clouds_position = origin_offset + extra_large_clouds_pos
-			clouds_resource.large_scale_clouds_position = origin_offset + large_clouds_pos
-			clouds_resource.medium_scale_clouds_position = origin_offset + medium_clouds_pos
-			clouds_resource.detail_clouds_position = origin_offset + small_clouds_pos
+			# Layer positions are for wind animation only - origin_offset is applied to rayOrigin in shader
+			clouds_resource.extra_large_scale_clouds_position = extra_large_clouds_pos
+			clouds_resource.large_scale_clouds_position = large_clouds_pos
+			clouds_resource.medium_scale_clouds_position = medium_clouds_pos
+			clouds_resource.detail_clouds_position = small_clouds_pos
 			
 			clouds_resource.wind_direction = wind_direction
 			
@@ -124,14 +130,14 @@ func _process(delta : float):
 			for i in range(tracked_point_lights.size()):
 				if tracked_point_lights[i] == null:
 					continue
-				if point_light_data_changed(tracked_point_lights[i], clouds_resource.point_lights_data[i * 2], clouds_resource.point_lights_data[i * 2 + 1]):
+				if point_light_data_changed(tracked_point_lights[i], clouds_resource.point_lights_data[i * 2], clouds_resource.point_lights_data[i * 2 + 1]) or offset_changed:
 					retrieve_texture_data()
 					return
 			
 			for i in range(tracked_point_effectors.size()):
 				if tracked_point_effectors[i] == null:
 					continue
-				if point_effector_data_changed(tracked_point_effectors[i], clouds_resource.point_effector_data[i * 2], clouds_resource.point_effector_data[i * 2 + 1]):
+				if point_effector_data_changed(tracked_point_effectors[i], clouds_resource.point_effector_data[i * 2], clouds_resource.point_effector_data[i * 2 + 1]) or offset_changed:
 					retrieve_texture_data()
 					return
 			
@@ -208,7 +214,8 @@ func retrieve_texture_data():
 		for i in range(tracked_point_lights.size()):
 			if tracked_point_lights[i] != null:
 				var light = tracked_point_lights[i]
-				var light_pos = light.global_position
+				# Apply origin_offset for clipmap compatibility
+				var light_pos = light.global_position + origin_offset
 				clouds_resource.point_lights_data.append(Vector4(light_pos.x, light_pos.y, light_pos.z, light.omni_range))
 				clouds_resource.point_lights_data.append(Vector4(light.light_color.r, light.light_color.g, light.light_color.b, round(light.light_color.a * light.light_energy * point_light_power_multiplier * 10.0) / 10.0))
 		
@@ -216,7 +223,8 @@ func retrieve_texture_data():
 		for i in range(tracked_point_effectors.size()):
 			if tracked_point_effectors[i] != null:
 				var node = tracked_point_effectors[i]
-				var node_pos = node.global_position
+				# Apply origin_offset for clipmap compatibility
+				var node_pos = node.global_position + origin_offset
 				clouds_resource.point_effector_data.append(Vector4(node_pos.x, node_pos.y, node_pos.z, node.Radius))
 				clouds_resource.point_effector_data.append(Vector4(node.Power, 0.0, 0.0, 0.0))
 		
