@@ -443,6 +443,12 @@ void main() {
 	vec4 view = scene_data_block.data.inv_projection_matrix * vec4(depthUV*2.0-1.0,depth,1.0);
 	view.xyz /= view.w;
 	float linear_depth = length(view); //used to calculate depth based on the view angle, idk just works.
+	// RENDER-SKYRING-1: sky (reverse-Z depth 0) reconstructs to the planar far plane, so the depthBreak cut
+	// is radial about the view centre; sky is beyond everything, so push it past the march horizon
+	// (2 steps margin keeps the strict > tests from tying at dither == 1).
+	if (depth <= 0.0) {
+		linear_depth = max(linear_depth, (genericData.data.max_step_count + 2.0) * genericData.data.max_step_distance);
+	}
 	//4.4 doesn't work with this
 	// if (linear_depth > scene_data_block.data.z_far){ 
 	// 	linear_depth *= 100.0;
